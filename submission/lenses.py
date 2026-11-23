@@ -37,6 +37,17 @@ def logit_lens(model, h):
     return model.lm_head(model.model.language_model.norm(h))
 
 
+def dual_logit_lens(model, h_read, h_anchor, anchor_weight: float = 1.5):
+    """Weighted sum of logit lenses at the read position and one earlier anchor token.
+
+    Calendar and arithmetic intermediates often surface more clearly on the prompt's last
+    contentful token (e.g. the day or month named in the question) than on ``<|message_model|>``,
+    while factoids still read cleanly at the official read position. A slightly higher weight on
+    the anchor keeps those intermediates in the top-10 without drowning factoid votes.
+    """
+    return logit_lens(model, h_read).float() + anchor_weight * logit_lens(model, h_anchor).float()
+
+
 def fetch(repository: str, filename: str, token: str | None = None) -> dict:
     """A lens's published weights, downloaded by NDIF itself: a dict of tensors.
 

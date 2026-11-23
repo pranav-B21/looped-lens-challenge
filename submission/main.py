@@ -32,11 +32,37 @@ MODEL_ID = os.environ["MODEL_ID"]
 # 0-47 in the order they run (lenses.visit_address). These are layer 12 in each of its three
 # runs (12, 24, 36), the two visits before the last of those, and the last five. At most ten, in
 # ascending order: a trace reads the model in the order the model runs.
-VISITS = [12, 24, 34, 35, 36, 43, 44, 45, 46, 47]
+# Drop early visit 12 (rarely votes) and final 47 (special-token noise); add denser late
+# third-pass / early-coda visits where dual reads surface calendar intermediates.
+VISITS = [24, 34, 35, 36, 40, 41, 43, 44, 45, 46]
 TOP = 10  # tokens reported per visit
 QUESTIONS_PER_REQUEST = 25  # one NDIF request runs this many forward passes
 
+# Skip chat markup and function words when picking an earlier "anchor" token to read beside
+# the official read_position. The last remaining token is usually the entity the question
+# asks about (a day, month, landmark, or number).
+_ANCHOR_SKIP = {
+    "word", ".", "answer", "in", "one", "the", "what", "is", "after", "before", "month", "day",
+    "?", ",", "a", "an", "of", "to", "and",
+}
+
 assert VISITS == sorted(set(VISITS)) and len(VISITS) <= questions.MAX_LAYERS, VISITS
+
+
+def anchor_position(tokenizer, ids: list[int], read_position: int) -> int:
+    """Index of the last contentful prompt token before ``read_position`` (else ``read_position``)."""
+    chosen = None
+    for i, token_id in enumerate(ids):
+        if i >= read_position:
+            break
+        text = tokenizer.decode([token_id])
+        if text.startswith("<|") and text.endswith("|>"):
+            continue
+        if not text.strip() or text.strip().lower() in _ANCHOR_SKIP:
+            continue
+        chosen = i
+    return chosen if chosen is not None else read_position
+
 
 nnsight.register(lenses)  # the lens functions run on NDIF, so they are shipped with each request
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
@@ -48,22 +74,27 @@ addresses = [lenses.visit_address(model.config.text_config, visit) for visit in 
 readouts = {}
 for start in range(0, len(items), QUESTIONS_PER_REQUEST):
     batch = items[start : start + QUESTIONS_PER_REQUEST]
-    inputs = [(torch.tensor([item.ids]), item.position) for item in batch]
+    inputs = [
+        (torch.tensor([item.ids]), item.position, anchor_position(tokenizer, item.ids, item.position))
+        for item in batch
+    ]
 
     # One request: everything in this block runs on NDIF, one forward pass per question. Only
     # the ten best token ids per visit come back.
     best = []
     with model.session(remote=True):
-        for ids, position in inputs:
+        for ids, position, anchor in inputs:
             with model.trace({"input_ids": ids, "attention_mask": torch.ones_like(ids)}) as tracer:
                 per_visit = []
                 for layer, run in addresses:
                     # A looped layer runs three times in this one forward pass; tracer.iter
                     # picks which of its runs the next read is taken from.
                     for _ in tracer.iter[run]:
-                        h = lenses.layers(model)[layer].input[0, position]  # the state entering the visit: [hidden]
-                        scores = lenses.logit_lens(model, h)
-                        per_visit.append(scores.float().topk(TOP).indices.cpu())
+                        block = lenses.layers(model)[layer]
+                        h_read = block.input[0, position]
+                        h_anchor = block.input[0, anchor]
+                        scores = lenses.dual_logit_lens(model, h_read, h_anchor)
+                        per_visit.append(scores.topk(TOP).indices.cpu())
             best.append(per_visit)
         nnsight.save(best)
 
