@@ -8,8 +8,8 @@ The leaderboard starts this file once per dataset, with these environment variab
     MODEL_ID       the model being read
     NDIF_API_KEY, NDIF_HOST, HF_TOKEN   your credentials; nnsight and huggingface_hub read them
 
-For each question the lens reads the model at four layer visits and reports the ten tokens it
-finds most likely at each, with the starter's logit lens (lenses.logit_lens). Three visits are read
+For each question the lens reads the model at seven layer visits and reports the ten tokens it
+finds most likely at each, with the starter's logit lens (lenses.logit_lens). Six visits are read
 at the question's read position. One is read at the end of the question itself, its last "?":
 on questions such as "What is the day after Friday?" the model has worked the intermediate out
 there, and the instruction that follows ("Answer in one word.") washes it out before the read
@@ -37,7 +37,10 @@ MODEL_ID = os.environ["MODEL_ID"]
 # 0-47 in the order they run (lenses.visit_address). At most ten, in ascending order: a trace reads
 # the model in the order the model runs. Fewer readouts are better than more when the extra ones
 # vote for wrong options, which raises the bar the intermediate has to clear.
-VISITS = [44, 45, 46, 47]
+# Layer 12's input in passes 2 and 3 (visits 24 and 36: a block boundary, holding the finished
+# block of layers 6-11) and the coda carry most questions at the read position; the leaderboard's
+# entries that read 24, 36 and 43-47 score far above those that read the coda alone.
+VISITS = [24, 36, 43, 44, 45, 46, 47]
 # Visits read at the end of the question (its last "?") rather than at the read position.
 AT_QUESTION = {46}
 # Tokens that cannot name an option (punctuation, whitespace, chat markup) are left out of every
