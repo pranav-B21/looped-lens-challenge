@@ -2,6 +2,25 @@
 
 **Source:** `https://ndif-looped-lens-challenge.hf.space/api/leaderboard`, the public JSON that both the leaderboard and <https://waka.mx/loops> (Mihai Cosma, team waka.mx) read. To refresh, run `.venv/bin/python research/leaderboard.py`, which saves a snapshot to `research/data/leaderboard/` and prints a summary. Each entry reports only its scores, its run time and the visits it read. Nothing shows its lens or its read positions.
 
+## Snapshot 2026-11-24 17:32 UTC (120 entries, 38 teams)
+
+| # | Team | Score | A | B | C | Visits ("Layers read") |
+|---|---|---|---|---|---|---|
+| 1 | Daria Kryvosheieva | 0.790 | 0.73 | 0.79 | 0.85 | [157]: one readout, labelled 157 |
+| 2 | Tokenless | 0.786 | 0.73 | 0.79 | 0.84 | 24, 27, 36, 39, 40, 43–47 |
+| 3 | CB26 | 0.777 | 0.70 | 0.80 | 0.83 | 12 visits (they vary by question) |
+| 4 | Standard Logits | 0.774 | 0.67 | 0.81 | 0.84 | 16, 24, 34, 42–47 |
+| 5 | Srujun | 0.763 | 0.64 | 0.79 | 0.86 | [12]: one readout |
+| 11–12 | defiance, lukxst | 0.748, 0.744 | | | | [11], [14]: one readout each |
+| | Starter's visits (15 entries) | 0.654–0.728 | | | | |
+
+**New since the first snapshot:**
+- **Single-readout entries now place high** (0.74–0.79). Presumably they pool many visits or positions into one ranked list. On our dev set, pooled lists score 0.62 against 0.70 for v1: they lose two-hop questions, where the pooled list puts the final answer (a distractor) first. Their datasets evidently reward pooling more than ours does.
+  - Caution: a label like 157 is not a layer, and the judge is told each token comes from one activation. Pooling across visits may be against the spirit of the rules; ask the organizers before copying it.
+- **"Layers read" is the union over questions,** so entries such as CB26's list 12 or 13 visits while giving each question at most 10 readouts.
+- **The best scores per dataset are now** A 0.75, B 0.83, C 0.86. Dataset A is still the hardest.
+- **Mid-pass visits are common among the top 10:** 24–29 and 36–41 come up again and again. On our exact-match dev set they don't help. One explanation: their tokens are often non-English (`星期`, `요일`), which the leaderboard's judge counts as translations and our exact-match scorer doesn't. Scoring with the judge (an OpenAI key) would settle it.
+
 ## Snapshot 2026-11-24 02:23 UTC (24 entries, 16 teams)
 
 | # | Team | Score | A | B | C | Visits |

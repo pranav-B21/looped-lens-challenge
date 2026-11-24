@@ -37,6 +37,24 @@ def logit_lens(model, h):
     return model.lm_head(model.model.language_model.norm(h))
 
 
+def junk_ids(tokenizer, vocab_size: int) -> list[int]:
+    """Token ids that cannot name anything: no letter or digit (punctuation, whitespace, stray
+    bytes) or chat markup such as ``<|content_thinking|>``. A fixed property of the tokenizer,
+    the same for every question; it runs locally, and the ids travel in the request (~23 KB)."""
+    junk = []
+    for token_id, text in enumerate(tokenizer.batch_decode([[i] for i in range(vocab_size)])):
+        if not any(ch.isalnum() for ch in text) or (text.startswith("<|") and text.endswith("|>")):
+            junk.append(token_id)
+    return junk
+
+
+def top_tokens(scores, junk, k: int):
+    """The ``k`` best token ids of ``scores`` [vocabulary], leaving out the ``junk`` ids, which
+    would otherwise take top places at many visits (",", "\\n\\n", "<|content_thinking|>")."""
+    scores = scores.float().index_fill(0, junk.to(scores.device), float("-inf"))
+    return scores.topk(k).indices
+
+
 def fetch(repository: str, filename: str, token: str | None = None) -> dict:
     """A lens's published weights, downloaded by NDIF itself: a dict of tensors.
 

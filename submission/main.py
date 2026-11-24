@@ -40,6 +40,8 @@ MODEL_ID = os.environ["MODEL_ID"]
 VISITS = [44, 45, 46, 47]
 # Visits read at the end of the question (its last "?") rather than at the read position.
 AT_QUESTION = {46}
+# Tokens that cannot name an option (punctuation, whitespace, chat markup) are left out of every
+# readout, so that the ten places go to tokens that can (lenses.junk_ids).
 TOP = 10  # tokens reported per visit
 # One NDIF request runs this many forward passes. LENS_QUESTIONS_PER_REQUEST overrides it, so that
 # a local test can make the run send several requests.
@@ -62,6 +64,8 @@ items = questions.load(tokenizer)
 model = TransformersModel(MODEL_ID)
 # Each visit as (layer, which of that layer's runs): what the trace below asks NDIF for.
 addresses = [lenses.visit_address(model.config.text_config, visit) for visit in VISITS]
+# lm_head scores the unpadded vocabulary.
+junk = torch.tensor(lenses.junk_ids(tokenizer, model.config.text_config.unpadded_vocab_size))
 
 
 def question_end(ids: list[int], read_position: int) -> int:
@@ -92,7 +96,7 @@ def read_batch(batch):
                     for _ in tracer.iter[run]:
                         h = lenses.layers(model)[layer].input[0, where]  # the state entering the visit: [hidden]
                         scores = lenses.logit_lens(model, h)
-                        per_visit.append(scores.float().topk(TOP).indices.cpu())
+                        per_visit.append(lenses.top_tokens(scores, junk, TOP).cpu())
             best.append(per_visit)
         best = nnsight.save(best)
     if len(best) != len(batch):

@@ -40,3 +40,17 @@ Branch `version1`, from `main` at 6668f34. All work below is on that branch.
   - ask the organizers whether reading at the `?` position is fine;
   - plain-format prompts are still weak;
   - arithmetic is unreadable without training (Stage 3).
+
+## 2026-11-24 ~18:00 UTC: lens v2 (junk filter), after a leaderboard refresh
+
+- **Leaderboard:** 120 entries, top 0.790. Single-readout entries are near the top; notes in [leaderboard.md](leaderboard.md).
+- **`research/try_lenses.py`:** many variants in one pass: 8 late visits × {active, MoE input} × {read, ?} × {raw, junk-filtered}, plus 7 pooled lists.
+  - **`research/score_variants.py`** scores them.
+  - **Pooled single readouts** reach 0.62 on chat against v1's 0.70: they lose two-hop questions.
+  - **The junk filter** helps a little everywhere.
+- **v2 = v1 + junk filter** (`lenses.junk_ids`, `lenses.top_tokens`). On the 375 dev questions that ran: chat 0.678 against 0.674 for v1, plain 0.449 against 0.416. Practice 0.90; small batches OK; format OK.
+- **NDIF was slow:** about 52 s per request of 25, and a 3-question request took up to 223 s. The 13-minute budget per dataset cut the 434-question dev run at 375 and still exited 0. A hidden dataset of about 100 questions is 4 requests, about 3.5 minutes.
+- **Open:**
+  - judge-based scoring (needs an OpenAI key), to check whether multilingual mid-pass readouts help;
+  - the plain-format rule (read everything at the `?`), worth +0.05 on plain;
+  - a trained lens for arithmetic.
