@@ -31,7 +31,9 @@
 | 4 | Srujun | 0.723 | 0.67 | 0.69 | 0.81 | 11, 23, 29, 42, 44, 45, 46, 47 |
 | 5 | Phoenix | 0.722 | 0.63 | 0.74 | 0.79 | 22, 26, 28, 35, 36, 39, 43, 44, 45, 46 |
 | 13 | Starter logit lens (official) | 0.662 | 0.66 | 0.56 | 0.77 | the starter's: 12, 24, 34, 35, 36, 43–47 |
-| 14 | **Pranav B (us)** | 0.660 | 0.58 | 0.61 | 0.79 | 24, 34, 35, 36, 40, 41, 43–46 |
+| 14 | **Pranav B (us)** | 0.660 | 0.58 | 0.61 | 0.79 | 24, 34, 35, 36, 40, 41, 43–46 (flagged: two positions) |
+| later | Pranav B v2 | 0.712 | 0.66 | 0.767 | 0.71 | 44, 45, 47 at the read position + 46 at `?` (flagged) |
+| later | Pranav B v4 (compliant) | 0.666 | 0.68 | 0.567 | 0.75 | 24, 36, 43–47 at the read position |
 
 ## What we take from it
 

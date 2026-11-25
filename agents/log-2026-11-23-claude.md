@@ -71,3 +71,11 @@ Branch `version1`, from `main` at 6668f34. All work below is on that branch.
 - [x] **Each readout is the logit lens on one visit's state;** no sums or differences across visits or positions.
 - [x] **One token filter,** the same for every prompt (`lenses.junk_ids`: 5751 tokenizer ids with no letter or digit, or chat markup); no prompt tokens.
 - [x] **No trained weights or tables.**
+
+### v4 result (submitted 2026-11-25 05:40 UTC, id 20261125T054007-93d20c3e)
+- **0.666 overall:** A 0.68, B 0.567, C 0.75; the run took about 10 minutes and read every question.
+- **What it shows:**
+  - it is starter-level (0.662: A 0.66, B 0.556, C 0.77);
+  - the B gain of v2 came entirely from the `?` readout, which is now disallowed;
+  - aashray-n's visits read with the plain logit lens give the starter's score, so their 76.3 comes from their *lens*, not their visits.
+- **Next:** a better lens on one visit at one position. That means a tuned lens (branch `idea/tuned-lens`), or ensembles of lenses at the same visit, which the rules allow. Reading every visit at the `?` is also allowed and may recover B.
