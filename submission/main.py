@@ -8,13 +8,10 @@ The leaderboard starts this file once per dataset, with these environment variab
     MODEL_ID       the model being read
     NDIF_API_KEY, NDIF_HOST, HF_TOKEN   your credentials; nnsight and huggingface_hub read them
 
-For each question the lens reads the model at seven layer visits and reports the ten tokens it
-finds most likely at each, with the starter's logit lens (lenses.logit_lens). Six visits are read
-at the question's read position. One is read at the end of the question itself, its last "?":
-on questions such as "What is the day after Friday?" the model has worked the intermediate out
-there, and the instruction that follows ("Answer in one word.") washes it out before the read
-position. The choice was measured on our own labelled questions (research/), not on the practice
-set: see agents/findings.md.
+For each question the lens reads the model at seven layer visits, all at the question's read
+position, and reports the ten tokens it finds most likely at each, with the starter's logit lens
+(lenses.logit_lens) and tokens that cannot name anything left out. Every readout of a prompt is
+taken at that one position, as the rules require (LENS_RULES.md).
 """
 
 import os
@@ -41,8 +38,6 @@ MODEL_ID = os.environ["MODEL_ID"]
 # block of layers 6-11) and the coda carry most questions at the read position; the leaderboard's
 # entries that read 24, 36 and 43-47 score far above those that read the coda alone.
 VISITS = [24, 36, 43, 44, 45, 46, 47]
-# Visits read at the end of the question (its last "?") rather than at the read position.
-AT_QUESTION = {46}
 # Tokens that cannot name an option (punctuation, whitespace, chat markup) are left out of every
 # readout, so that the ten places go to tokens that can (lenses.junk_ids).
 TOP = 10  # tokens reported per visit
@@ -71,33 +66,20 @@ addresses = [lenses.visit_address(model.config.text_config, visit) for visit in 
 junk = torch.tensor(lenses.junk_ids(tokenizer, model.config.text_config.unpadded_vocab_size))
 
 
-def question_end(ids: list[int], read_position: int) -> int:
-    """The position of the question's last "?" before the read position: a fixed rule on the
-    prompt's punctuation, never on what it asks. The read position when there is none."""
-    for i in range(read_position - 1, -1, -1):
-        if "?" in tokenizer.decode([ids[i]]):
-            return i
-    return read_position
-
-
 def read_batch(batch):
     """One NDIF request: one forward pass per question, the ten best token ids per visit back."""
-    inputs = []
-    for item in batch:
-        question = question_end(item.ids, item.position)
-        # The token each visit is read at, in the order of VISITS.
-        wheres = [question if visit in AT_QUESTION else item.position for visit in VISITS]
-        inputs.append((torch.tensor([item.ids]), wheres))
+    # Every visit of a question is read at its one read position.
+    inputs = [(torch.tensor([item.ids]), item.position) for item in batch]
     best = []
     with model.session(remote=True):
-        for ids, wheres in inputs:
+        for ids, position in inputs:
             with model.trace({"input_ids": ids, "attention_mask": torch.ones_like(ids)}) as tracer:
                 per_visit = []
-                for (layer, run), where in zip(addresses, wheres):
+                for layer, run in addresses:
                     # A looped layer runs three times in this one forward pass; tracer.iter
                     # picks which of its runs the next read is taken from.
                     for _ in tracer.iter[run]:
-                        h = lenses.layers(model)[layer].input[0, where]  # the state entering the visit: [hidden]
+                        h = lenses.layers(model)[layer].input[0, position]  # the state entering the visit: [hidden]
                         scores = lenses.logit_lens(model, h)
                         per_visit.append(lenses.top_tokens(scores, junk, TOP).cpu())
             best.append(per_visit)

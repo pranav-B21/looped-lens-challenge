@@ -13,6 +13,18 @@ What we know, with the evidence for each claim. Newest at the top of each sectio
   - Seen: a probe request failed with `Expected all tensors to be on the same device … cuda:1 … cuda:0`.
 - **At the chat read position (`<|message_model|>`), the model's next token is `<|content_thinking|>`.** The `final_input`-mixed readout late in the network fills with that format prediction. On reasoning prompts the last visits show the topic (`arithmetic`, `week`) but not the answer.
 
+## The rules (clarified by the organizers, 2026-11-24; see LENS_RULES.md)
+
+- **One position per prompt:** every readout of a prompt at the same token.
+- **One visit per readout:** no sums or differences across visits.
+- **No prompt text** in building, filtering or ranking readouts.
+- **Status of our designs:**
+  - v1, v2 and v3 read visit 46 at the `?` and the rest at the read position, which **breaks the first rule**;
+  - our first entry summed two positions, which breaks it too;
+  - both scored entries were flagged (the email reached the user);
+  - v4, on branch `idea/one-position`, reads every visit at the read position.
+- **What the `?` findings below are now worth:** they still describe the model, but an entry may only use them by reading *all* its visits at the `?`.
+
 ## The scoring
 
 - **Each scored dataset is one family** (`evaluator/evaluate.py`, `_questions`).

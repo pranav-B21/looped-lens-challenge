@@ -54,3 +54,20 @@ Branch `version1`, from `main` at 6668f34. All work below is on that branch.
   - judge-based scoring (needs an OpenAI key), to check whether multilingual mid-pass readouts help;
   - the plain-format rule (read everything at the `?`), worth +0.05 on plain;
   - a trained lens for arithmetic.
+
+## 2026-11-25 ~04:30 UTC: v4, compliant with the 2026-11-24 rule clarifications
+
+- **Rules:** the organizers' clarifications (LENS_RULES.md, cherry-picked 832e157) disallow reading different positions in one prompt. Our first entry and v2 broke that and were flagged. I stopped v3 before submitting it.
+- **v4** (branch `idea/one-position`): visits 24, 36 and 43–47, **all at the read position**; logit lens; junk filter.
+- **Tests:**
+  - practice 0.60 (the starter's level, since the `?` gain is gone);
+  - format OK, small batches OK, exit 0;
+  - the dev run read only 50 of 217 questions within its budget because NDIF was congested (queue waits over 20 minutes).
+
+### LENS_RULES.md checklist (answered from the code)
+- [x] **One position per prompt:** the only read is `lenses.layers(model)[layer].input[0, position]`, with the same `position` (the official read position) for every visit.
+- [x] **The position is not chosen per prompt:** it is always `read_position`; nothing compares candidate positions.
+- [x] **7 visits** (24, 36, 43, 44, 45, 46, 47), at most 10, none read just to decide, labels are the visit numbers, no repeats.
+- [x] **Each readout is the logit lens on one visit's state;** no sums or differences across visits or positions.
+- [x] **One token filter,** the same for every prompt (`lenses.junk_ids`: 5751 tokenizer ids with no letter or digit, or chat markup); no prompt tokens.
+- [x] **No trained weights or tables.**
