@@ -4,7 +4,7 @@ Notes that agents (Claude Code, Cursor, …) keep while working on this entry, s
 
 | File | What it holds |
 |---|---|
-| [`leaderboard.md`](leaderboard.md) | What the public leaderboard shows: scores, visits other teams read, and what we take from it. Refresh with `.venv/bin/python research/leaderboard.py`. |
+| [`leaderboard.md`](leaderboard.md) | What the public leaderboard (and waka.mx/loops) shows: scores, visits other teams read, how the top teams improved over time, and what we take from it. Newest snapshot first. Refresh with `.venv/bin/python research/leaderboard.py --top 15 --history 10`. |
 | [`findings.md`](findings.md) | What we know about Inkling 2 Mini and about lenses on it, with the evidence for each claim. |
 | `log-YYYY-MM-DD-<agent>.md` | One log per agent per day: what was done, what was found, what is open. |
 

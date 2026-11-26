@@ -2,6 +2,61 @@
 
 **Source:** `https://ndif-looped-lens-challenge.hf.space/api/leaderboard`, the public JSON that both the leaderboard and <https://waka.mx/loops> (Mihai Cosma, team waka.mx) read. To refresh, run `.venv/bin/python research/leaderboard.py`, which saves a snapshot to `research/data/leaderboard/` and prints a summary. Each entry reports only its scores, its run time and the visits it read. Nothing shows its lens or its read positions.
 
+## How to use these notes
+
+- **When to read them:** before choosing visits, picking the next lens idea, or deciding whether to submit. Read the newest snapshot first; the older ones are history.
+- **Refreshing the data:** `.venv/bin/python research/leaderboard.py --top 15 --history 10`.
+  - `--history N` prints every submission of the top N teams in time order: score, datasets, run time, flag, visits.
+  - `--team "<name>"` prints one team's history; `--team "Pranav B"` is ours.
+- **What the feed shows and doesn't:** it holds scores, run time, the union of visits read, and a `flagged` field. It never shows a lens, its positions or its code, so read the patterns as hints. Every idea taken from here still has to pass `LENS_RULES.md`.
+
+## Snapshot 2026-11-26 19:10 UTC (751 entries, 103 teams)
+
+Scores roughly doubled their margin over the starter in two days. The median entry per day went 0.665 (11-23), 0.724 (11-24), 0.773 (11-25), 0.826 (11-26). The official starter baseline is still listed at 0.662, from 11-23; it was not rerun.
+
+| # | Team | Score | A | B | C | Visits (all questions combined) | Subs |
+|---|---|---|---|---|---|---|---|
+| 1 | team-macromackie | **0.990** | 1.00 | 0.99 | 0.98 | 37–41, 43–47 | 15 |
+| 2 | ekhadley | 0.983 | 1.00 | 0.98 | 0.97 | 12, 24, 36–40, 44–47 (11 combined) | 6 |
+| 3 | mingly | 0.975 | 0.99 | 0.96 | 0.98 | 34, 36, 38, 40, 42–47 | 3 |
+| 4 | Arnav Raj | 0.970 | 0.98 | 1.00 | 0.93 | 5, 17, 22, 29, 39, 42–46 | 17 |
+| 5 | Aadi Palnitkar | 0.940 | 0.91 | 1.00 | 0.91 | 9, 26, 37, 38, 40, 43–47 | 17 |
+| 6 | Daniil Ognev | 0.923 | 0.90 | 0.98 | 0.89 | 17 combined (17, 21–23, 26, 29, 30, 33–35, 40–46) | 15 |
+| 7 | NRYOUNG | 0.920 | 0.86 | 0.99 | 0.91 | 24, 28, 35, 36, 39, 40, 42, 44–46 | 9 |
+| 8 | hluo | 0.914 | 0.93 | 0.93 | 0.88 | 16, 24, 34, 36, 40, 43–47 | 17 |
+| 9 | hosh | 0.906 | 0.89 | 0.99 | 0.84 | 35, 36, 42–47 | 9 |
+| 10 | Looped Readers | 0.906 | 0.89 | 0.99 | 0.84 | 24, 34–36, 42–47 | 9 |
+| 75 | **Pranav B (us)** | 0.712 (flagged) / 0.666 (v4, compliant) | 0.68 | 0.57 | 0.75 | v4: 24, 36, 43–47 | 3 |
+
+### How the top 10 build their entries
+
+1. **Most of the gain comes from the lens, not the visits.** Several teams kept one visit set and still climbed:
+   - **Aadi Palnitkar** kept one set from 11-25 04:41 and went 0.809 → 0.872 → 0.885 → 0.920 → 0.940.
+   - **team-macromackie** read the same visits for its last 7 submissions and went 0.949 → 0.963 → 0.990.
+   - **hluo** kept its set for 13 submissions and went 0.730 → 0.914.
+
+   The lens must be what changed: probably retrained tuned or translator lenses, or ensembles at the same visit. Entries that read exactly the starter's visits now reach 0.82, against 0.66 for the plain logit lens.
+2. **The visits have converged:**
+   - the coda, 42/43–47, which almost every entry reads;
+   - late in the third core pass, **37–41**, plus 34–36;
+   - at most one to three early visits as extras: Arnav 5, 17, 22, 29; Aadi 9, 26; ekhadley 12, 24.
+
+   team-macromackie's jump from 0.886 to 0.956 came when it moved from 16/24/34 to 37–41. Over all 751 entries, reading 37–42 or 43–47 goes with +3 to +10 points, and reading 12 with −4.
+3. **The coda alone collapses C.** ekhadley read only 42–47 twice, and C fell to 0.17. Adding back 36–40 brought C up to 0.96.
+4. **Some teams vary visits by prompt.** Daniil Ognev and Arnav list up to 17 visits combined, while each prompt still reads at most 10. The clarified rules allow this.
+5. **The top teams resubmit on a fixed 2-hour cycle, around the clock.** Aadi submits at :41, hluo near :51/:00, macromackie at :35. That looks like an automated train → submit loop.
+   - It partly tunes against the hidden sets. Phase 2 brings new questions, and the final ranking mixes phases, so treat leaderboard-tuned gains as fragile.
+   - Same-entry resubmissions move by 0.004–0.01 (0.963 → 0.959), so treat differences under about 0.01 as noise.
+6. **B is solved and A/C decide the ranking.** B is 0.93–1.00 across the top 10. The leaders got there by raising **A** (macromackie 0.57 → 1.00, Arnav 0.38 → 0.98) and then C. They now hold A ≥ 0.98 and C ≥ 0.97.
+7. **Their lenses are heavier.** Top runs take 1,000–2,400 s, against the 2,700 s limit for all three datasets (Arnav 2,379 s). That points to coda lenses, which run the model's own later layers on the state, or several lenses per visit. Leave headroom: a timeout fails the whole submission.
+8. **The flags hit 21 entries, one per team, all from 11-24 and 11-25.** They include Srujun, CB26, team-macromackie's first, and our 0.712. Flagged teams resubmitted compliant entries and kept climbing.
+
+### What it means for our lens
+
+- **Train the lens.** Visit hunting is mostly done, and our gap of about 0.3 is the lens. Start with a tuned lens per visit, fitted locally on activations collected on NDIF from our own prompts (`research/`, branch `idea/tuned-lens`). Publish it to the HF Hub and fetch it with `lenses.fetch`.
+- **Start from the converged visits:** 35/36, 37–41 and 43–47. Then test whether one or two early visits help.
+- **Measure on our own dev set, not on practice.** Before each submission, also run the `LENS_RULES.md` checklist and keep the run well under 2,700 s.
+
 ## Snapshot 2026-11-24 17:32 UTC (120 entries, 38 teams)
 
 | # | Team | Score | A | B | C | Visits ("Layers read") |
@@ -31,11 +86,9 @@
 | 4 | Srujun | 0.723 | 0.67 | 0.69 | 0.81 | 11, 23, 29, 42, 44, 45, 46, 47 |
 | 5 | Phoenix | 0.722 | 0.63 | 0.74 | 0.79 | 22, 26, 28, 35, 36, 39, 43, 44, 45, 46 |
 | 13 | Starter logit lens (official) | 0.662 | 0.66 | 0.56 | 0.77 | the starter's: 12, 24, 34, 35, 36, 43–47 |
-| 14 | **Pranav B (us)** | 0.660 | 0.58 | 0.61 | 0.79 | 24, 34, 35, 36, 40, 41, 43–46 (flagged: two positions) |
-| later | Pranav B v2 | 0.712 | 0.66 | 0.767 | 0.71 | 44, 45, 47 at the read position + 46 at `?` (flagged) |
-| later | Pranav B v4 (compliant) | 0.666 | 0.68 | 0.567 | 0.75 | 24, 36, 43–47 at the read position |
+| 14 | **Pranav B (us)** | 0.660 | 0.58 | 0.61 | 0.79 | 24, 34, 35, 36, 40, 41, 43–46 |
 
-## What we take from it
+## What we took from it on 2026-11-24 (superseded where the 11-26 snapshot disagrees)
 
 - **Our first submission tied the starter.** It was the Cursor branch's dual-position lens (`cursor/optimized-inkling-lens-v1-*`), which scored 0.90 on the 10 practice questions and 0.660 on the hidden sets. Practice gains do not carry over, so measure on our own dev set (`research/`).
 - **Run-to-run noise is small, so the lens is what matters.** Five entries that look like the unchanged starter (same visits) score 0.654–0.668, about ±0.007. Numericus Group reads the same visits and scores 0.724, so its *lens* adds about 6 points. Visit choice alone does not explain the top scores.

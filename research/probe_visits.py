@@ -86,6 +86,7 @@ def main():
     parser.add_argument("--positions", type=int, default=12)
     parser.add_argument("--limit", type=int, default=None, help="only the first N questions")
     parser.add_argument("--visits", type=int, default=VISITS, help="only the first N visits (for a quick test)")
+    parser.add_argument("--shard", default="0/1", help="i/n: only batches whose number is i modulo n, to run n probes side by side")
     args = parser.parse_args()
 
     questions = [json.loads(line) for line in open(args.questions) if line.strip()][: args.limit]
@@ -96,9 +97,10 @@ def main():
     addresses = [lenses.visit_address(model.config.text_config, v) for v in range(args.visits)]
     args.out.mkdir(parents=True, exist_ok=True)
 
+    shard, shards = map(int, args.shard.split("/"))
     for start in range(0, len(questions), args.per_request):
         path = args.out / f"batch-{start // args.per_request:04d}.pt"
-        if path.exists():
+        if path.exists() or (start // args.per_request) % shards != shard:
             continue
         chunk = questions[start : start + args.per_request]
         batch, meta = [], []
