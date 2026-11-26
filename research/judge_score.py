@@ -2,8 +2,11 @@
 
     .venv/bin/python research/judge_score.py READOUTS.jsonl [--name NAME] [--model string-match]
 
-Needs ``uv sync --group evaluator`` and OPENAI_API_KEY, in the environment or in the repository's
-``.env``. ``--model string-match`` runs the same code with no model, for a free check. Each of our
+Needs ``uv sync --group evaluator`` and a key in the environment or in the repository's ``.env``:
+OPENAI_API_KEY for the leaderboard's own judge, or XAI_API_KEY with ``--provider xai --model
+<grok model>`` to send the same judge prompts to Grok through xAI's OpenAI-compatible API (a
+different judge than the leaderboard's, so a proxy). ``--model string-match`` runs the same code
+with no model, for a free check. Each of our
 questions gets the two texts the judge is shown with it: the practice set's rules (the same for
 every practice question) and a task line for its family, written like the practice set's. The
 score card goes to research/data/judge/<name>/.
@@ -35,10 +38,11 @@ TASKS = {
 
 def load_env():
     env = ROOT / ".env"
-    if env.exists() and not os.environ.get("OPENAI_API_KEY"):
+    if env.exists():
         for line in env.read_text().splitlines():
-            if line.startswith("OPENAI_API_KEY="):
-                os.environ["OPENAI_API_KEY"] = line.split("=", 1)[1].strip().strip('"')
+            name, _, value = line.partition("=")
+            if name.strip() in ("OPENAI_API_KEY", "XAI_API_KEY") and not os.environ.get(name.strip()):
+                os.environ[name.strip()] = value.strip().strip("\"'")
 
 
 def main():
@@ -47,11 +51,18 @@ def main():
     parser.add_argument("--questions", type=Path, default=ROOT / "research" / "data" / "dev" / "questions.jsonl")
     parser.add_argument("--name", default=None)
     parser.add_argument("--model", default=None, help="judge model (default: the leaderboard's), or string-match")
+    parser.add_argument("--provider", choices=("openai", "xai"), default="openai", help="where a model with no vendor in its name is reached")
     args = parser.parse_args()
     load_env()
 
     import lens_eval
     from lens_eval import config
+    if args.provider == "xai":
+        if not args.model:
+            sys.exit("--provider xai needs --model, a Grok model name such as the one in xAI's console")
+        # lens_eval sends a model with no "/" in its name to the OpenAI-compatible endpoint below.
+        config.OPENAI_API_BASE = "https://api.x.ai/v1"
+        config.OPENAI_API_KEY_ENV = "XAI_API_KEY"
 
     submissions = [json.loads(l) for l in open(args.readouts) if l.strip()]
     wanted = {s["id"] for s in submissions}
