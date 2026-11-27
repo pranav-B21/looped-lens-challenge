@@ -133,6 +133,53 @@ we tried first (reading at two places in the question, mixing positions) are not
 trained lens on one visit at one position is explicitly allowed. The leaderboard also shows that
 teams improved mostly by improving their lens, not by picking different visits (section 6).
 
+**Which part of the pipeline we train:** only the adjustment. For each hidden question on the
+leaderboard:
+
+```
+hidden question (we never see it)
+   → the model runs on NDIF                            frozen: nobody can change it
+   → at each chosen visit, at one place in the question:
+       the page (the model's hidden state there)
+   → + the small adjustment for that visit             ← the only part we train
+   → the model's own translator (its output layer)     frozen: we call it, we don't change it
+   → scores for every word → drop punctuation and markup → top 10 words = one readout
+   → up to 10 readouts → the judge → each readout votes → the question passes or fails
+```
+
+Everything else stays as in our compliant entry: the visits, the one place per question, the
+filter, the voting.
+
+**Where it is stored:**
+- **While we work:** in one file on our computer, with one adjustment for each visit from 30 to 47.
+  It holds only numbers, no code. It is about 10 MB, and it is never committed.
+- **For the entry:** only the visits we choose (10 at most) go to a public page on Hugging Face,
+  about 6 MB.
+- **On the leaderboard:** the entry downloads them at the start of each request and keeps them in
+  memory only.
+
+**Why it should raise our score:**
+- **What the logit lens misses.** It assumes a page in the middle of the model is already written
+  in the final dialect. In this model that is badly wrong: each of the three passes starts again from
+  the beginning, and a page mixes several blocks of layers. At most visits in the middle of a pass it
+  reads almost nothing. In our first small test it found the right word 0% of the time at visits 37
+  to 42.
+- **What training changes.** The adjustment learns how each visit writes and translates it. In the
+  same small test (240 questions, three kinds):
+
+  | Visit | Trained lens | Logit lens |
+  |---|---|---|
+  | 40 | 43% | 0% |
+  | 36 | 77% | 62% |
+  | 44 | 88% | 80% |
+
+- **How that becomes pass rate.** Readouts that were blank or wrong now vote for the right option,
+  so more questions clear the bar. It also helps exactly at the visits the top teams read (35–41 and
+  the last block), where our lens was blind, and it aims at the step in between, which the hidden
+  datasets A and C seem to reward.
+- **How we check before submitting.** We compare it with the plain logit lens on our separate dev
+  questions, at the same visits, and we only publish and submit if it wins clearly.
+
 **What could go wrong:**
 - **It might learn our questions, not the model.** If our practice questions don't look like
   the hidden ones, the lens can score well on ours and not help on the leaderboard. So we check

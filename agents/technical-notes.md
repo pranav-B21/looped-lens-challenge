@@ -91,11 +91,47 @@ answer lens:  lm_head( norm( h + (h @ U_v) @ V_v^T + b_v ) )
 | Step | File | Runs on | What it does |
 |---|---|---|---|
 | 1. Questions | `research/make_train_questions.py` | Mac | Writes 1,518 labelled training questions, kept separate from the 434 dev questions. Families: one- and two-step arithmetic, one- and two-step day/month shifts, two-hop country, country, sport, instrument; chat format |
-| 2. States | `research/collect_states.py` | NDIF | One Inkling forward pass per question. Saves the state entering visits 30–47 at the read position and at the last `?` (bf16), 40 questions per request, with retries |
+| 2. States | `research/collect_states.py` | NDIF | One Inkling forward pass per question. Saves the state entering visits 30–47 at the read position and at the last `?` (bf16), with a 600 s timeout per request and retries. The first 520 training and 200 dev questions went 40 per request (`states/train`, `states/dev`). After results of about 6.6 MB stopped coming back, the rest went 10 per request (`states/train-rest`, `states/dev-rest`). All 1,518 and 434 were collected |
 | 3. Head | `research/fetch_unembed.py` | Mac, from the HF Hub | Downloads Inkling's unembedding and final-norm weight (926 MB), so training can run locally. The local head reproduces NDIF's logit-lens top 10 exactly |
 | 4. Train | `research/answer_lens.py` | Mac (MPS) | Fits `U, V, b` per visit. Picks up to 10 visits on held-out *training* prompts, then reports that design on dev against the logit lens at the same visits |
 | 5. Publish | the HF Hub | | Weights as safetensors in bf16 (about 10 MB) |
 | 6. Entry | `submission/main.py`, `lenses.py` | NDIF | Fetches the weights once per request with `lenses.fetch`, moves them to the activation's device and dtype, and applies `lm_head(norm(h + correction))` at each chosen visit, all at one position |
+
+### Which stage is trained
+
+```
+hidden question → Inkling on NDIF (frozen)
+  → h = layers[L].input[0, position]            one position per prompt, the same for every visit
+  → s = h + (h @ U_v) @ V_v.T + b_v             ← trained: U_v, V_v [2304, 64], b_v [2304]
+  → logits = lm_head(norm(s))                   frozen; on NDIF the entry calls model.lm_head
+                                                and model.model.language_model.norm
+  → index_fill(junk_ids, -inf) → topk(10)       lenses.top_tokens; junk_ids fixed per tokenizer
+  → readout labelled v → judge → plurality vote
+```
+
+- **Parameters:** 2 × 2304 × 64 + 2304, about 297k per visit, about 5.3M for all 18 visits. Inkling has 26.4B.
+- **Initialization:** `U = 0`, `V` near 0, `b = 0`, so before training it equals the starter's logit lens.
+- **Loss:** `logsumexp(logits) − logsumexp(logits[target forms])`, where the target forms are every single-token casing and spacing of the intermediate (`probe_visits.variants`).
+- **Training:** AdamW (lr 3e-3, weight decay 1e-2), 40 epochs, batch 128, on MPS. The local head is `unembed[:200058] @ (rms(s) * norm_weight)`, from `research/data/unembed.safetensors`.
+
+### Storage
+
+| Where | What |
+|---|---|
+| `research/data/answer_lens-{read,qmark}.safetensors` (local, git-ignored) | `v{visit}.U`, `v{visit}.V`, `v{visit}.b` for visits 30–47, in bf16, about 10 MB. Metadata: `visits` (the chosen design, JSON), `position`, `rank` |
+| A public HF model repo (to do; the user's `looped-lense-2` token can write) | only the chosen visits, about 6 MB. No Inkling weights, no question files |
+| NDIF, per request | `lenses.fetch(repo, file)` before the first trace; tensors arrive on the CPU, so move each to `h.device` and `h.dtype` |
+
+### Why it should raise the score
+
+- **What the plain head misses.** It assumes mid-network states are already in the final state's basis. Here each pass restarts from the prelude's state and the residual is a block mix, so at visits 37–42 the raw head hit the intermediate **0%** of the time in the smoke test.
+- **Smoke test** (240 train and 40 dev chat questions, 3 families, 5 epochs), single-readout hit rate on dev, trained vs. raw head:
+  - v36: 0.77 vs 0.62
+  - v40: 0.43 vs 0.00
+  - v44: 0.88 vs 0.80
+  - v46: 0.85 vs 0.70
+- **More readouts voting for the intermediate** raises the plurality margin, at exactly the visits top teams use (35–41 and 43–47).
+- **The gate:** the dev design must beat the logit lens at the same visits, per family, before publishing.
 
 Inkling is called in steps 2 and 6 only, both through nnsight with `model.session(remote=True)`. Downloading the open weights locally (step 3) is fine. The rule that code cannot read the weights applies to code running on NDIF.
 
