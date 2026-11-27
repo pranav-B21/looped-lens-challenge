@@ -33,7 +33,7 @@ Branch `idea/answer-lens`, started from the compliant v4 (`idea/one-position`, d
 - **20:15–01:28 The collection hung.** All 4 collectors sat on NDIF requests that never answered, for more than 5 hours. At 00:31 I misreported it as about a third done: those were old batch counts, not live progress.
   - Fixed: each request now times out (`--timeout`, 600 s here) and is sent again, and the script ends with `os._exit(0)`.
   - Restarted at 01:30. The 13 training and 5 dev batches already collected are kept.
-  - The fix is not committed yet; it will be once the collection finishes, because nnsight reads the script's source while it runs.
+  - The fix is committed as 06a0516. Committing does not change the file the running collectors read.
 - **The other session's commits on this branch:** ed572e4 (agents/research.md, technical-notes.md) and 5c9c7ee (a `CLAUDE.md` addition pointing agents to the notes). The user has been told about the `CLAUDE.md` change, and it is the user's call.
 
 ## Now (01:30)
