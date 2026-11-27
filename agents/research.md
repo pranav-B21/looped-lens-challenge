@@ -301,3 +301,20 @@ the model's translator.
 **Why did our entry get flagged?**
 It read one visit at the question mark and the others at the last token: two positions in one
 question. The clarified rules say all readouts of a question come from one position.
+
+**Are we allowed to collect states from the model for our training questions? Is it within the rules?**
+Yes. The challenge's own guide for agents describes this as the way to train a lens: write questions
+of your own, run the model on them through NDIF, and save what it computes inside.
+- **The questions are ours.** We wrote them: athletes, musicians, landmarks, arithmetic, days and
+  months. We never see the leaderboard's hidden questions, and this step does not involve them.
+- **What we save:** the model's internal state at a few layer visits, at two places in each
+  question. That is about 170 KB per question, kept on our computer and never submitted.
+- **What we do with it:** teach a small correction, one per layer visit, so the lens reads the right
+  word out of that state. The correction is a set of numbers that turns a state into word scores. It
+  holds no list of questions or answers.
+- **On the leaderboard:** the entry still reads the model's state on each hidden question, at one
+  place, and applies the correction. Nothing is worked out from the question's words, which the
+  rules forbid.
+- **One caveat about measuring, not about the rules:** there are only 7 days and 12 months, so our
+  training and test questions share calendar facts with different wording. Our own score on calendar
+  questions may come out a little high.
