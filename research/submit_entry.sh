@@ -3,6 +3,7 @@
 #
 #     research/submit_entry.sh [BRANCH]        # default: idea/hybrid
 #     MIN_PRACTICE=0.8 research/submit_entry.sh # a stricter practice threshold (default 0.65)
+#     DRY_RUN=1 research/submit_entry.sh       # run the checks (steps 1-4) only; submit nothing
 #
 # 1. Switches to BRANCH and refuses to go on if submission/ has uncommitted changes.
 # 2. Rules sanity check (LENS_RULES.md): the entry reads the model in exactly one place.
@@ -20,6 +21,7 @@ set -euo pipefail
 
 BRANCH="${1:-idea/hybrid}"
 MIN_PRACTICE="${MIN_PRACTICE:-0.65}"
+DRY_RUN="${DRY_RUN:-0}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 PY="$ROOT/.venv/bin/python"
@@ -68,6 +70,11 @@ RATE="$(echo "$LOCAL" | awk '$1 == "practice" {print $2}' | tail -1)"
 [ -n "$RATE" ] || fail "the practice run did not produce a score"
 "$PY" -c "import sys; sys.exit(0 if float('$RATE') >= float('$MIN_PRACTICE') else 1)" || fail "practice pass rate $RATE is below $MIN_PRACTICE"
 echo "ok: practice pass rate $RATE"
+
+if [ "$DRY_RUN" = "1" ]; then
+    say "DRY RUN: every check passed; nothing was submitted"
+    exit 0
+fi
 
 say "5/7 Waiting for the submission slot"
 until "$PY" submit.py --status 2>&1 | grep -q "1 of 1 left"; do
