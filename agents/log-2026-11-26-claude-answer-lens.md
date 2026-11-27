@@ -99,3 +99,33 @@ Branch `idea/answer-lens`, started from the compliant v4 (`idea/one-position`, d
   - the greedy choice stopped at one readout. Next, test designs with several strong visits (43–46), which may help the hidden sets even when the held-out set says one is enough.
 - **Caveat:** calendar facts overlap between training and dev, with different wording, so shift1 and shift2 dev scores may be optimistic.
 - **Running:** the same training with every visit at the `?`.
+
+## The answer-lens pipeline (reference)
+
+Where the trained part sits in the leaderboard's pipeline for each hidden question. Only the
+correction box is trained; Inkling and its norm and unembedding stay frozen.
+
+```
+ hidden question (we never see it)
+        │
+        ▼
+ Inkling 2 Mini runs on NDIF  ─────────────  FROZEN (nobody can change it)
+        │   at each chosen visit, at ONE position:
+        ▼
+ hidden state h (2,304 numbers)
+        │
+        ▼
+ ┌──────────────────────────────┐
+ │  correction for this visit    │  ◀── THE ONLY PART WE TRAIN
+ │  h + (h·U)·Vᵀ + b             │      (U, V: 2,304 × 64;  b: 2,304)
+ └──────────────────────────────┘
+        │
+        ▼
+ Inkling's own final norm + unembedding ─── FROZEN (called on NDIF as model.lm_head)
+        │
+        ▼
+ scores for 200,058 tokens → junk filter → top 10 tokens = one readout
+        │
+        ▼
+ up to 10 readouts → leaderboard judge → each readout votes → pass / fail
+```

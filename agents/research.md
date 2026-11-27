@@ -150,6 +150,34 @@ hidden question (we never see it)
 Everything else stays as in our compliant entry: the visits, the one place per question, the
 filter, the voting.
 
+**The same pipeline, in detail.** `h` is the page, `U`, `V` and `b` are the numbers we train, and the
+output layer is the model's own, used unchanged:
+
+```
+ hidden question (we never see it)
+        │
+        ▼
+ Inkling 2 Mini runs on NDIF  ─────────────  FROZEN (nobody can change it)
+        │   at each chosen visit, at ONE position:
+        ▼
+ hidden state h (2,304 numbers)
+        │
+        ▼
+ ┌──────────────────────────────┐
+ │  correction for this visit    │  ◀── THE ONLY PART WE TRAIN
+ │  h + (h·U)·Vᵀ + b             │      (U, V: 2,304 × 64;  b: 2,304)
+ └──────────────────────────────┘
+        │
+        ▼
+ Inkling's own final norm + unembedding ─── FROZEN (called on NDIF as model.lm_head)
+        │
+        ▼
+ scores for 200,058 tokens → junk filter → top 10 tokens = one readout
+        │
+        ▼
+ up to 10 readouts → leaderboard judge → each readout votes → pass / fail
+```
+
 **Where it is stored:**
 - **While we work:** in one file on our computer, with one adjustment for each visit from 30 to 47.
   It holds only numbers, no code. It is about 10 MB, and it is never committed.
