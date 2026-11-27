@@ -162,3 +162,44 @@ The `?`-position weights are in `research/data/answer_lens-qmark.safetensors`. S
 - **visit 46 at the question's last `?`;**
 - **when a prompt has no `?`:** visit 44 at the read position, with the read-position lens. One position per prompt either way.
 - **To try next if the leaderboard disagrees:** the 5-visit `?` design.
+
+## 02:40 Published the lens, wired it into the entry
+
+- **Published** to <https://huggingface.co/pranavbelligundu/inkling-looped-lens>, a public model repo, with the user's `looped-lense-2` token.
+  - The file is `answer_lens_v1.safetensors` (1.2 MB, bf16): `qmark.v46.{U,V,b}` and `read.v44.{U,V,b}`. It holds no Inkling weights and no questions, and the repo has a README model card.
+  - `lenses.fetch` downloads it **with no token** and returns tensors identical to the local file.
+- **Checked:** the model's final norm is `weight * x * rsqrt(mean(x^2) + eps)`, the same as the local head used in training.
+- **`submission/lenses.py`:** `answer_lens(model, h, weights, name)` computes `logit_lens(model, h + (h@U)@V.T + b)` in float32, with the weights moved to `h.device`.
+- **`submission/main.py`:**
+  - per prompt, `plan(item)`: the last `?` → `qmark.v46` at visit 46; no `?` → `read.v44` at visit 44 at the read position;
+  - **one readout per prompt, at one position;**
+  - weights fetched with `lenses.fetch` inside the session, before the first trace;
+  - the junk filter is kept.
+- **Practice, direct run of `main.py`: 10/10 (1.000),** including arith-10 (`7`), dayafter, daybefore and monthafter. 173 s.
+
+## 03:30 Full test suite: the lens works, NDIF congestion is the risk
+
+- **`submit.py --local`:** practice **10/10 (1.000)**, layer read: 46.
+- **Dev through the entry:** only 100 of 434 questions were read within the 13-min budget. Requests sat at NDIF queue positions 41–81 for up to 20 min.
+  - On those 100 (country, instrument and sport only, since the file is in family order): chat **0.982**, plain **0.885**. That matches or beats the local prediction, so NDIF computes the lens as trained.
+- **Small batches (3 per request):** exit 0, but only 3/10 were read. One request hit a server-side `ValidationError for ResponseModel`; the others ran out of time in the queue.
+- **Format checks:** OK.
+- **The risk:** throughput, not the lens. Our timeout resent a request after 300 s, which put it at the back of NDIF's queue.
+- **The change in `submission/main.py`:**
+  - a request with no answer is waited for until the dataset's budget runs out, never resent; errors are still retried up to 3 times;
+  - `QUESTIONS_PER_REQUEST` goes from 25 to **100**, so a scored dataset (90–100 questions) waits in the queue once. Only 10 token ids per question come back.
+- **Testing:** one 100-question request through the entry, on a random mix of all 8 dev families, chat and plain (`research/data/dev-100`).
+
+## 03:40 One 100-question request works; the rules checklist; submitting as v5
+
+- **One request with 100 mixed dev questions** (all 8 families, chat and plain): all 100 written in 584 s, about 9 min of it at NDIF queue position 77.
+  - Score: chat 0.883 and plain 0.730. That's noisy, with 3–13 per family; the full offline dev score is chat 0.935.
+- **v5 = the answer lens:** visit 46 at the last `?` (`qmark.v46`), or visit 44 at the read position (`read.v44`) when a prompt has no `?`. Weights at `pranavbelligundu/inkling-looped-lens`; 100 questions per request; no resending.
+
+### LENS_RULES.md checklist (answered from the code)
+- [x] **One position per prompt:** the only read is `main.py:103`, `lenses.layers(model)[layer].input[0, position]`, once per prompt.
+- [x] **The position is chosen by punctuation only:** `question_end` finds the last `?` (an example the rules list as allowed), else the read position. No comparison of readouts.
+- [x] **1 visit per prompt** (46, or 44), labelled with its number; no decision visits.
+- [x] **The readout comes from that visit's state only:** `answer_lens` corrects `h` and applies `lm_head(norm(.))`. No sums or differences across visits or positions.
+- [x] **The only filter** is `lenses.junk_ids`: a fixed tokenizer list, the same for every prompt. Prompt ids are used only as model input and to locate the `?`.
+- [x] **Weights** fitted on our own 1,518 questions; low-rank, no answer tables; public.

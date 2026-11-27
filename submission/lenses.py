@@ -37,6 +37,24 @@ def logit_lens(model, h):
     return model.lm_head(model.model.language_model.norm(h))
 
 
+def answer_lens(model, h, weights, name: str):
+    """The answer lens: a trained low-rank correction of one visit's state ``h`` [hidden], then the
+    model's own final norm and unembedding, as the logit lens applies them.
+
+        logits = lm_head(norm(h + (h @ U) @ V.T + b))
+
+    ``weights`` are the published tensors (``lenses.fetch``); ``name`` picks one lens in them, such
+    as ``"qmark.v46"``. They arrive on the CPU, so each is moved to ``h``'s device first; the
+    correction is computed in float32 and handed back in ``h``'s dtype.
+    """
+    U = weights[name + ".U"].to(h.device).float()
+    V = weights[name + ".V"].to(h.device).float()
+    b = weights[name + ".b"].to(h.device).float()
+    x = h.float()
+    corrected = x + (x @ U) @ V.T + b
+    return logit_lens(model, corrected.to(h.dtype))
+
+
 def junk_ids(tokenizer, vocab_size: int) -> list[int]:
     """Token ids that cannot name anything: no letter or digit (punctuation, whitespace, stray
     bytes) or chat markup such as ``<|content_thinking|>``. A fixed property of the tokenizer,
