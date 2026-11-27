@@ -42,11 +42,17 @@ VOCAB = 200058  # what lm_head scores
 
 
 def load_states(directory, questions):
-    rows, visits = [], None
-    for path in sorted(Path(directory).glob("batch-*.pt")):
+    """Rows from ``directory`` and its siblings named like it (``train`` and ``train-rest``, collected
+    at different request sizes), one per question id."""
+    rows, visits, seen = [], None, set()
+    directory = Path(directory)
+    for path in sorted(directory.parent.glob(directory.name + "*/batch-*.pt")):
         d = torch.load(path)
         visits = d["visits"]
-        rows += [r for r in d["rows"] if r["id"] in questions]
+        for r in d["rows"]:
+            if r["id"] in questions and r["id"] not in seen:
+                seen.add(r["id"])
+                rows.append(r)
     return rows, visits
 
 

@@ -47,3 +47,13 @@ Branch `idea/answer-lens`, started from the compliant v4 (`idea/one-position`, d
 2. **Publish** the weights to a public HF repo.
 3. **Wire** the lens into `submission/` (fetch with `lenses.fetch`, apply per visit, keep the junk filter).
 4. **Run the full tests** and the LENS_RULES.md checklist, then submit.
+
+## 01:50 The collection stalled again: large downloads stopped coming back
+
+- **What happened:** after the restart, all 4 requests (40 questions each, about 6.6 MB of results) reached "RUNNING" within 10–40 s on NDIF and then returned nothing for 600 s. A 4-question request (about 0.7 MB) finished in 226 s. NDIF reports the model running.
+  - The upstream repository recently added "Stream large downloads through the egress proxy", which fits large results failing to come back.
+- **The change:**
+  - the questions not yet collected (998 training, 234 dev) are in `research/data/states/{train,dev}-rest/questions.jsonl`;
+  - they are collected **10 per request** (about 1.7 MB), with 6 training and 2 dev collectors in parallel;
+  - `research/answer_lens.py` reads `states/train*` and `states/dev*`, one row per question id.
+- **Expected time:** 124 requests over 8 collectors is about 16 rounds of about 4 min, so roughly 60–70 min if NDIF holds.
