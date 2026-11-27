@@ -129,3 +129,36 @@ correction box is trained; Inkling and its norm and unembedding stay frozen.
         ▼
  up to 10 readouts → leaderboard judge → each readout votes → pass / fail
 ```
+
+## 02:50 Second full training run: every visit at the `?`, and the design choice
+
+The `?`-position weights are in `research/data/answer_lens-qmark.safetensors`. Single-readout hit rates on dev (chat), trained vs. logit lens:
+
+| Visits | Trained | Logit lens |
+|---|---|---|
+| 30–36 | 0.39–0.76 | about 0.0–0.1 |
+| 37–42 | 0.55–0.60 | 0.00–0.04 |
+| 43 | 0.82 | 0.44 |
+| 44 | 0.90 | 0.50 |
+| 45 | 0.90 | 0.51 |
+| 46 | **0.93** | 0.55 |
+| 47 | 0.78 | 0.22 |
+
+**The `?` lens at visit 46 alone:** held-out training questions 0.860, dev chat **0.935**, dev plain 0.779.
+- By family (dev chat): arith1 0.80, arith2 0.80, country 1.00, hop_country 1.00, instrument 0.95, shift1 1.00, shift2 0.93, sport 1.00.
+- The logit lens at the same visit and position scores 0.580.
+
+**Multi-visit designs** (`research/eval_designs.py`, which scores designs offline from the saved weights):
+
+| Design | Held-out training questions | Dev, chat | Dev, plain |
+|---|---|---|---|
+| `?`, [46] | **0.860** | 0.935 | **0.779** |
+| `?`, [34, 36, 44, 45, 46] | 0.814 | 0.946 | 0.764 |
+| `?`, [44, 45, 46] | 0.796 | 0.939 | 0.723 |
+| read, [44] | 0.810 | 0.868 | 0.673 |
+| read, best searched (36, 39, 43, 44, 47) | 0.821 | 0.869 | 0.549 |
+
+**Choice, by the rule fixed in advance** (choose on held-out training questions, only report on dev):
+- **visit 46 at the question's last `?`;**
+- **when a prompt has no `?`:** visit 44 at the read position, with the read-position lens. One position per prompt either way.
+- **To try next if the leaderboard disagrees:** the 5-visit `?` design.
