@@ -84,8 +84,31 @@ done
 echo "slot open"
 
 say "6/7 Submitting $BRANCH at $COMMIT"
-RESULT="$("$PY" submit.py --wait 2>&1 | tr '\r' '\n' | grep -v -E '^\s*$' | tail -15)"
-echo "$RESULT"
+# Stream the output (never capture it): if watching fails, the message must be on screen, and the
+# submission carries on regardless, so keep following it by its id.
+OUT="research/data/submissions/$STAMP.submit.txt"
+set +e
+"$PY" submit.py --wait 2>&1 | tr '\r' '\n' | grep --line-buffered -v -E '^\s*$' | tee "$OUT"
+set -e
+ID="$(grep -o -E 'submitted as .*: [0-9]{8}T[0-9]{6}-[0-9a-f]+' "$OUT" | awk '{print $NF}' | tail -1)"
+[ -n "$ID" ] || fail "no submission id in the output above; check with: $PY submit.py --status"
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    if grep -q -E '^\s*overall' "$OUT"; then
+        break
+    fi
+    if grep -q -E 'failed' "$OUT" && ! grep -q -E '^\s*overall' "$OUT"; then
+        if "$PY" submit.py --status 2>&1 | grep "$ID" | grep -q "failed"; then
+            fail "submission $ID failed on the leaderboard; see: $PY submit.py --status"
+        fi
+    fi
+    say "watching stopped before the score (attempt $attempt); following $ID again in 60s. The submission is still running."
+    sleep 60
+    set +e
+    "$PY" submit.py --status "$ID" 2>&1 | tr '\r' '\n' | grep --line-buffered -v -E '^\s*$' | tee -a "$OUT"
+    set -e
+done
+grep -q -E '^\s*overall' "$OUT" || fail "no score yet for $ID; follow it with: $PY submit.py --status $ID"
+RESULT="$(tail -15 "$OUT")"
 
 say "7/7 Recording the result"
 SCORE="$(echo "$RESULT" | awk '$1 == "overall" {print $2}')"
