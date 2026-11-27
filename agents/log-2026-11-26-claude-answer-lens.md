@@ -203,3 +203,19 @@ The `?`-position weights are in `research/data/answer_lens-qmark.safetensors`. S
 - [x] **The readout comes from that visit's state only:** `answer_lens` corrects `h` and applies `lm_head(norm(.))`. No sums or differences across visits or positions.
 - [x] **The only filter** is `lenses.junk_ids`: a fixed tokenizer list, the same for every prompt. Prompt ids are used only as model input and to locate the `?`.
 - [x] **Weights** fitted on our own 1,518 questions; low-rank, no answer tables; public.
+
+## 05:26 v5 result: 0.524 (A 0.40, B 0.82, C 0.35). B up, A and C collapsed
+
+- Submitted 03:40 from `idea/answer-lens` (65e097f). Run time 979 s, all datasets read. "Layers read: 44, 46" means some hidden prompts have **no `?`** and took the visit-44 fallback.
+- **Against v4** (plain logit lens, 7 visits at the read position: A 0.68, B 0.57, C 0.75):
+  - **B +0.25:** the trained lens works on questions like ours (calendar and recall);
+  - **A −0.28 and C −0.40:** on question kinds unlike our training families, one trained readout is far worse than the plain logit lens.
+- **Readings:**
+  1. The lens fitted our families' intermediates rather than a general reading of the state. Dev (0.935) shares our families, so it could not see this.
+  2. A single readout has no fallback: when it is wrong, the question fails.
+  3. A and C, which decide the ranking, are probably not phrased like the practice set (some have no `?`).
+- **Lessons for the next design:**
+  - **keep the plain logit lens's readouts,** which hold A 0.68 and C 0.75;
+  - **add the trained lens alongside them,** not instead of them;
+  - **train on more varied question kinds** and wordings, including prompts with no `?`;
+  - **treat dev as a check on B-type questions only.**

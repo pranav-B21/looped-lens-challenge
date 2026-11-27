@@ -50,12 +50,10 @@ Every readout of a prompt must come from one position and one visit. Within thos
 
 ## The answer lens (what we are building)
 
-**Status on 2026-11-27, 02:35 UTC:**
-- **Branch:** `idea/answer-lens`.
-- **Collection:** complete. All 1,518 training and 434 dev questions, visits 30–47, read position and `?`.
-- **Training at the read position:** done. Visit 44 alone scores dev (chat) **0.868**, against 0.521 for the logit lens at the same visit. The `?`-position run is in progress.
-- **Entry:** not wired into `submission/` yet.
-- **Submissions:** none with this lens.
+**Status on 2026-11-27, 05:30 UTC:**
+- **v5, the answer lens** (one trained readout: visit 46 at the `?`, visit 44 fallback), scored **0.524**: A 0.40, B 0.82, C 0.35.
+- B improved over v4 (0.57), while A and C collapsed (0.68 → 0.40, 0.75 → 0.35). The lens overfits our training families, and one readout has no fallback.
+- **Next:** keep the logit-lens readouts and add trained ones next to them; broaden the training questions.
 
 The log is [log-2026-11-26-claude-answer-lens.md](log-2026-11-26-claude-answer-lens.md).
 
