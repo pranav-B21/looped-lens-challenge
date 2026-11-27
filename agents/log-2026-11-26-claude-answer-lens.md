@@ -265,3 +265,11 @@ The `?`-position weights are in `research/data/answer_lens-qmark.safetensors`. S
   6. `submit.py --wait`;
   7. appends to `agents/submissions.md` and prints a leaderboard snapshot.
 - **The log** goes to `research/data/submissions/<UTC>.log`.
+
+## 08:04 v6 submitted by the user with research/submit_entry.sh
+
+- **The submission:** `20261127T080417-284ea6a3` (`idea/hybrid` at 9dbd10f; `submission/` identical to a1dd228). Steps 1–5 passed (practice 0.70) and it queued at "12 ahead".
+- **A script bug:** step 6 captured `submit.py --wait`'s output in a variable under `set -e` and `pipefail`. When the watcher exited early, the script ended silently, without the score.
+  - The submission was unaffected.
+  - Fixed: it now streams the output and follows the submission by its id, with retries.
+- **I'm following it** with `submit.py --status 20261127T080417-284ea6a3`.
