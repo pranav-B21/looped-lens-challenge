@@ -318,3 +318,15 @@ of your own, run the model on them through NDIF, and save what it computes insid
 - **One caveat about measuring, not about the rules:** there are only 7 days and 12 months, so our
   training and test questions share calendar facts with different wording. Our own score on calendar
   questions may come out a little high.
+
+**What are we training? Are we training the model?**
+No. Inkling 2 Mini is never changed, and nobody can change it on NDIF. We train **the lens**: one
+small correction per layer visit. It sits between the model's hidden state and the model's own
+output layer, and it learns to make the hidden state's top words show the question's intermediate.
+- **Size:** about 300,000 numbers per visit, against the model's 26.4 billion.
+- **Starting point:** "no correction", which is the plain logit lens. Training only moves it where
+  that helps.
+- **Where:** on our own computer, from the states we collected and the model's output layer, which
+  we downloaded and keep frozen.
+- **On the leaderboard:** the entry fetches the corrections and applies them to the model's state on
+  each hidden question. The readouts still come from the model's own activations.
