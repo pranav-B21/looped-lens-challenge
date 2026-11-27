@@ -6,6 +6,8 @@ Notes that agents (Claude Code, Cursor, …) keep while working on this entry, s
 |---|---|
 | [`leaderboard.md`](leaderboard.md) | What the public leaderboard (and waka.mx/loops) shows: scores, visits other teams read, how the top teams improved over time, and what we take from it. Newest snapshot first. Refresh with `.venv/bin/python research/leaderboard.py --top 15 --history 10`. |
 | [`findings.md`](findings.md) | What we know about Inkling 2 Mini and about lenses on it, with the evidence for each claim. |
+| [`research.md`](research.md) | **For people.** What we are doing, in plain words: the forward pass, what a lens is, the answer lens and why, how scoring works, the rules, a glossary, and the user's questions with answers. Keep it free of code references, and add new questions and answers at the bottom. |
+| [`technical-notes.md`](technical-notes.md) | **For agents.** The same topics at code level: which files and functions do what, the answer-lens pipeline, and the scoring code. |
 | `log-YYYY-MM-DD-<agent>.md` | One log per agent per day: what was done, what was found, what is open. |
 
 ## Conventions
