@@ -50,12 +50,14 @@ Every readout of a prompt must come from one position and one visit. Within thos
 
 ## The answer lens (what we are building)
 
-**Status on 2026-11-26:**
+**Status on 2026-11-27, 01:30 UTC:**
 - **Branch:** `idea/answer-lens`.
-- **Collection:** running on NDIF.
-- **Training:** not yet.
+- **Collection:** running on NDIF, 13/38 training and 5/11 dev batches. It was restarted after a 5-hour hang; each request now has a timeout.
+- **Training:** a 240-question smoke test only; the full run waits for all batches.
 - **Entry:** not wired into `submission/` yet.
-- **Submissions:** none.
+- **Submissions:** none with this lens.
+
+The log is [log-2026-11-26-claude-answer-lens.md](log-2026-11-26-claude-answer-lens.md).
 
 ### What changes
 
