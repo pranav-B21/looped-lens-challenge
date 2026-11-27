@@ -219,3 +219,49 @@ The `?`-position weights are in `research/data/answer_lens-qmark.safetensors`. S
   - **add the trained lens alongside them,** not instead of them;
   - **train on more varied question kinds** and wordings, including prompts with no `?`;
   - **treat dev as a check on B-type questions only.**
+
+## 05:40 v6, the hybrid (branch `idea/hybrid`, the user's choice)
+
+- **Design:** every prompt read at its **read position** (no `?` rule).
+  - visits **24, 36, 43, 45, 47** with the plain logit lens, which held v4's A 0.68 and C 0.75;
+  - visits **44, 46** with the read-position answer lens (`read.v44`, `read.v46`).
+  - The 5 logit readouts outvote 2 wrong trained ones on unfamiliar questions. Where the logit lens names nothing, as on calendar questions, the trained ones decide.
+- **Offline dev**, from the collected states. Visit 24 is not in them, so it is left out:
+
+  | Dev | v4 design (logit 36, 43–47) | Hybrid (logit 36, 43, 45, 47 + trained 44, 46) |
+  |---|---|---|
+  | chat | 0.541 | 0.767 |
+  | plain | 0.372 | 0.525 |
+
+  The hybrid's dev chat by family: arith1 0.60, arith2 0.83, country 1.00, hop_country 1.00, instrument 0.74, shift1 0.30, shift2 0.67, sport 1.00.
+- **Published** `answer_lens_v2.safetensors` (`read.v44`, `read.v46`; v1 kept). Fetched without a token, identical to the local file.
+- **Testing:** `submit.py --local`, the 100-question mixed dev set in one request, practice at 5 per request, and format checks.
+
+## 06:40 v6 hybrid tests pass; morning submission script
+
+- **Tests:**
+  - practice via `submit.py --local`: **0.70** (7/10; v4 0.60, v5 1.00);
+  - the 100-question mixed dev set in one request: all 100 read in 203 s; chat **0.731** and plain **0.496**, matching the offline prediction (0.767 / 0.525);
+  - practice at 5 per request: 10/10 lines, exit 0;
+  - format OK.
+- **Lower practice than v5:** v6 reads calendar questions at the read position, where the trained lens is weaker. That is the price of reading every prompt at the read position, and it keeps v4's 5 logit readouts for A and C.
+
+### LENS_RULES.md checklist (answered from the code)
+- [x] **One position per prompt:** the only read is `main.py:93`, `.input[0, position]`, with `position = item.position` (the read position) for every visit.
+- [x] **The position is not chosen per prompt:** always the read position.
+- [x] **7 visits** (24, 36, 43, 44, 45, 46, 47), labelled with their numbers, no repeats, no decision visits.
+- [x] **Each readout comes from one visit's state:** the logit lens at 24, 36, 43, 45, 47; the answer lens (`read.v44`, `read.v46`) at 44 and 46. No sums or differences across visits or positions.
+- [x] **The only filter** is the fixed `junk_ids`. Prompt ids are used only as model input.
+- [x] **Weights** fitted on our own questions; low-rank, no tables; public (`answer_lens_v2.safetensors`).
+
+### `research/submit_entry.sh`, for the user to run in the morning
+- **Command:** `research/submit_entry.sh [BRANCH]`, default `idea/hybrid`.
+- **Steps:**
+  1. switches branch, and refuses if `submission/` has uncommitted changes;
+  2. checks the entry reads the model in exactly one place;
+  3. fetches the weights without a token;
+  4. `submit.py --local` must reach `MIN_PRACTICE` (default 0.65);
+  5. waits for the slot;
+  6. `submit.py --wait`;
+  7. appends to `agents/submissions.md` and prints a leaderboard snapshot.
+- **The log** goes to `research/data/submissions/<UTC>.log`.

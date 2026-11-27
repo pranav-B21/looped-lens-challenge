@@ -8,16 +8,18 @@ The leaderboard starts this file once per dataset, with these environment variab
     MODEL_ID       the model being read
     NDIF_API_KEY, NDIF_HOST, HF_TOKEN   your credentials; nnsight and huggingface_hub read them
 
-For each question the lens reads one layer visit at one token position and reports the ten tokens
-it finds most likely there, with the answer lens (lenses.answer_lens): a trained low-rank
-correction of that state, then the model's own final norm and unembedding. Tokens that cannot name
-anything are left out.
+For each question the lens reads seven layer visits, all at the question's read position (one
+position per prompt, as LENS_RULES.md requires), and reports the ten tokens it finds most likely at
+each, with tokens that cannot name anything left out:
 
-The position is chosen per prompt from its punctuation, as LENS_RULES.md allows: the question's
-last "?", read at visit 46 with the lens trained there; a prompt with no "?" is read at its read
-position, at visit 44, with the lens trained there. Either way every readout of a prompt is at one
-position. The corrections were fitted on our own labelled questions (research/answer_lens.py) and
-are published on the Hugging Face Hub; NDIF fetches them once per request (lenses.fetch).
+- visits 24, 36, 43, 45 and 47 with the plain logit lens (lenses.logit_lens), which reads question
+  kinds unlike our own as well as the starter does;
+- visits 44 and 46 with the answer lens (lenses.answer_lens): a trained low-rank correction of
+  that state, then the model's own final norm and unembedding. It reads questions like our training
+  ones far better, and the five logit-lens readouts outvote it where it does not know the question.
+
+The corrections were fitted on our own labelled questions (research/answer_lens.py) and are
+published on the Hugging Face Hub; NDIF fetches them once per request (lenses.fetch).
 """
 
 import os
@@ -35,12 +37,13 @@ import questions
 
 MODEL_ID = os.environ["MODEL_ID"]
 
-# The trained lens: where its weights are published, and which visit each position is read at.
-# Visits are numbered 0-47 in the order they run (lenses.visit_address); layers 6-17 run three times.
+# The visits read, in the order the model runs them (numbered 0-47, lenses.visit_address; layers
+# 6-17 run three times), and which of them the trained lens reads. The rest use the logit lens.
+VISITS = [24, 36, 43, 44, 45, 46, 47]
+TRAINED = {44: "read.v44", 46: "read.v46"}
 LENS_REPOSITORY = "pranavbelligundu/inkling-looped-lens"
-LENS_FILE = "answer_lens_v1.safetensors"
-AT_QUESTION = ("qmark.v46", 46)  # the question's last "?"
-AT_READ = ("read.v44", 44)  # the read position, for prompts with no "?"
+LENS_FILE = "answer_lens_v2.safetensors"
+assert VISITS == sorted(set(VISITS)) and len(VISITS) <= questions.MAX_LAYERS and set(TRAINED) <= set(VISITS)
 # Tokens that cannot name an option (punctuation, whitespace, chat markup) are left out of every
 # readout, so that the ten places go to tokens that can (lenses.junk_ids).
 TOP = 10  # tokens reported per visit
@@ -67,43 +70,33 @@ model = TransformersModel(MODEL_ID)
 junk = torch.tensor(lenses.junk_ids(tokenizer, model.config.text_config.unpadded_vocab_size))
 
 
-def question_end(ids: list[int], read_position: int) -> int | None:
-    """The position of the prompt's last "?" before the read position, or None: a fixed rule on the
-    prompt's punctuation, which never looks at what the question asks."""
-    for i in range(read_position - 1, -1, -1):
-        if "?" in tokenizer.decode([ids[i]]):
-            return i
-    return None
-
-
-def plan(item):
-    """Where one question is read: (position, lens name, visit). One position for the whole prompt."""
-    question = question_end(item.ids, item.position)
-    if question is not None:
-        return (question,) + AT_QUESTION
-    return (item.position,) + AT_READ
+# Each visit as (layer, which of that layer's runs): what the trace below asks NDIF for.
+addresses = [lenses.visit_address(model.config.text_config, visit) for visit in VISITS]
+lens_names = [TRAINED.get(visit) for visit in VISITS]  # None: the logit lens
 
 
 def read_batch(batch):
-    """One NDIF request: one forward pass per question, the ten best token ids of its readout back."""
-    inputs = []
-    for item in batch:
-        position, name, visit = plan(item)
-        layer, run = lenses.visit_address(model.config.text_config, visit)
-        inputs.append((torch.tensor([item.ids]), position, name, layer, run))
+    """One NDIF request: one forward pass per question, the ten best token ids per visit back."""
+    # Every visit of a question is read at its one read position.
+    inputs = [(torch.tensor([item.ids]), item.position) for item in batch]
     best = []
     with model.session(remote=True):
         # Fetched by NDIF itself, once per request and before the first trace.
         weights = lenses.fetch(LENS_REPOSITORY, LENS_FILE)
-        for ids, position, name, layer, run in inputs:
+        for ids, position in inputs:
             with model.trace({"input_ids": ids, "attention_mask": torch.ones_like(ids)}) as tracer:
-                # A looped layer runs three times in this one forward pass; tracer.iter picks
-                # which of its runs the read is taken from.
-                for _ in tracer.iter[run]:
-                    h = lenses.layers(model)[layer].input[0, position]  # the state entering the visit: [hidden]
-                    scores = lenses.answer_lens(model, h, weights, name)
-                    top = lenses.top_tokens(scores, junk, TOP).cpu()
-            best.append(top)
+                per_visit = []
+                for (layer, run), name in zip(addresses, lens_names):
+                    # A looped layer runs three times in this one forward pass; tracer.iter
+                    # picks which of its runs the next read is taken from.
+                    for _ in tracer.iter[run]:
+                        h = lenses.layers(model)[layer].input[0, position]  # the state entering the visit: [hidden]
+                        if name is None:
+                            scores = lenses.logit_lens(model, h)
+                        else:
+                            scores = lenses.answer_lens(model, h, weights, name)
+                        per_visit.append(lenses.top_tokens(scores, junk, TOP).cpu())
+            best.append(per_visit)
         best = nnsight.save(best)
     if len(best) != len(batch):
         raise RuntimeError(f"the request returned {len(best)} results for {len(batch)} questions")
@@ -152,16 +145,14 @@ for start in range(0, len(items), QUESTIONS_PER_REQUEST):
     if best is None:
         print(f"{questions.DATASET}: giving up on questions {start} to {start + len(batch) - 1}", file=sys.stderr, flush=True)
         continue
-    for item, token_ids in zip(batch, best):
-        _, _, visit = plan(item)
-        readouts[item.id] = [{"layer": visit, "tokens": questions.token_strings(tokenizer, token_ids.tolist())}]
+    for item, per_visit in zip(batch, best):
+        readouts[item.id] = [{"layer": visit, "tokens": questions.token_strings(tokenizer, token_ids.tolist())} for visit, token_ids in zip(VISITS, per_visit)]
     print(f"{questions.DATASET}: read {min(start + QUESTIONS_PER_REQUEST, len(items))} of {len(items)} questions", flush=True)
 
 questions.OUTPUT.parent.mkdir(parents=True, exist_ok=True)
 questions.write(items, readouts)
-at_question = sum(question_end(item.ids, item.position) is not None for item in items)
-print(f"{questions.DATASET}: wrote {len(readouts)} of {len(items)} questions in {time.monotonic() - STARTED:.0f}s "
-      f"({at_question} read at their \"?\" with visit 46, {len(items) - at_question} at the read position with visit 44)", flush=True)
+print(f"{questions.DATASET}: wrote {len(readouts)} of {len(items)} questions at visits {VISITS} "
+      f"(trained lens at {sorted(TRAINED)}) in {time.monotonic() - STARTED:.0f}s", flush=True)
 sys.stdout.flush()
 sys.stderr.flush()
 # A request abandoned while it hung, or a connection nnsight leaves open, can keep the interpreter
