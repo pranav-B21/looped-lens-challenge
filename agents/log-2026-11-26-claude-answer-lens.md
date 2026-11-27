@@ -57,3 +57,45 @@ Branch `idea/answer-lens`, started from the compliant v4 (`idea/one-position`, d
   - they are collected **10 per request** (about 1.7 MB), with 6 training and 2 dev collectors in parallel;
   - `research/answer_lens.py` reads `states/train*` and `states/dev*`, one row per question id.
 - **Expected time:** 124 requests over 8 collectors is about 16 rounds of about 4 min, so roughly 60–70 min if NDIF holds.
+
+## ~02:10 The collection is complete
+
+- **All 1,518 training and all 434 dev questions** have states, with none missing and no failed requests. Checked by question id over `states/{train,train-rest,dev,dev-rest}`.
+- **The 10-question requests took 1.5–4 min each.** The 8 collectors finished the remaining 124 requests in about 20 min.
+
+## 02:15 User questions answered and added to the notes
+
+- **Are we allowed to collect states for our own questions?** Yes: AGENTS.md "Training a lens" describes exactly this. The answer is in research.md section 9.
+- **What are we training?** The lens, not the model. Answered in research.md section 9.
+- **Is publishing to HF and fetching on NDIF allowed?** Yes: the README and AGENTS.md describe this route, and LENS_RULES.md allows tuned lenses on one visit at one position.
+  - The gray area: the unembedding was downloaded locally for training. The rule against reading weights applies to code on NDIF, and the entry only calls `model.lm_head`. The user may confirm on Discord.
+- **Which stage is trained, where it is stored, why it should help:** added to research.md section 4 (plain words) and to technical-notes.md (formula, tensors, storage). Commit 4c2110a.
+
+## 02:30 First full training run: every visit at the read position
+
+`research/answer_lens.py --position read --epochs 40` trained on 1,518 questions and was scored on 217 dev chat questions. Weights are in `research/data/answer_lens-read.safetensors`.
+
+- **Single-readout hit rate on dev, trained vs. plain logit lens:**
+
+  | Visits | Trained | Logit lens |
+  |---|---|---|
+  | 30–35 | 0.38–0.77 | 0.00–0.16 |
+  | 36 | 0.79 | 0.29 |
+  | 37–42 | 0.55–0.66 | 0.00–0.05 |
+  | 43 | **0.90** | 0.37 |
+  | 44 | 0.86 | 0.49 |
+  | 45 | 0.81 | 0.47 |
+  | 46 | 0.85 | 0.43 |
+  | 47 | 0.67 | 0.04 |
+
+- **Visits chosen on held-out training questions:** `[44]` only (val 0.810). No second readout improved the held-out pass rate.
+- **Dev (chat) for that design:**
+  - **trained 0.868:** arith1 0.73, arith2 0.97, country 1.00, hop_country 1.00, instrument 0.84, shift1 0.50, shift2 0.90, sport 1.00;
+  - **logit lens at the same visit, 0.521:** arith1 0.17, arith2 0.43, country 0.73, hop_country 0.80, instrument 0.63, shift1 0.00, shift2 0.40, sport 1.00.
+  - For reference, v4's 7-visit design with the logit lens scores about 0.55.
+- **Readings:**
+  - this is the first lens that reads arithmetic (0.17 → 0.73) and two-step questions (arith2 0.97, shift2 0.90);
+  - shift1 (0.50) is the weak spot;
+  - the greedy choice stopped at one readout. Next, test designs with several strong visits (43–46), which may help the hidden sets even when the held-out set says one is enough.
+- **Caveat:** calendar facts overlap between training and dev, with different wording, so shift1 and shift2 dev scores may be optimistic.
+- **Running:** the same training with every visit at the `?`.

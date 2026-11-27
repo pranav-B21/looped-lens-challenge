@@ -50,10 +50,10 @@ Every readout of a prompt must come from one position and one visit. Within thos
 
 ## The answer lens (what we are building)
 
-**Status on 2026-11-27, 01:30 UTC:**
+**Status on 2026-11-27, 02:35 UTC:**
 - **Branch:** `idea/answer-lens`.
-- **Collection:** running on NDIF, 13/38 training and 5/11 dev batches. It was restarted after a 5-hour hang; each request now has a timeout.
-- **Training:** a 240-question smoke test only; the full run waits for all batches.
+- **Collection:** complete. All 1,518 training and 434 dev questions, visits 30–47, read position and `?`.
+- **Training at the read position:** done. Visit 44 alone scores dev (chat) **0.868**, against 0.521 for the logit lens at the same visit. The `?`-position run is in progress.
 - **Entry:** not wired into `submission/` yet.
 - **Submissions:** none with this lens.
 
