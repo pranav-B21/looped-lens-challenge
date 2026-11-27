@@ -12,7 +12,9 @@ confirm its local head reproduces NDIF's. Batches already in OUT_DIR are skipped
 
 import argparse
 import json
+import os
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -60,6 +62,7 @@ def main():
     parser.add_argument("out", type=Path)
     parser.add_argument("--per-request", type=int, default=20)
     parser.add_argument("--shard", default="0/1")
+    parser.add_argument("--timeout", type=int, default=900, help="seconds to wait for one request before sending it again")
     args = parser.parse_args()
     shard, shards = map(int, args.shard.split("/"))
     questions = [json.loads(l) for l in open(args.questions) if l.strip()]
@@ -80,16 +83,30 @@ def main():
             ids = tokenizer(q["model_input"], add_special_tokens=False)["input_ids"]
             assert len(ids) - 1 == q["read_position"], q["id"]
             batch.append((torch.tensor([ids]), [q["read_position"], question_end(tokenizer, ids, q["read_position"])]))
+        results = None
         for attempt in range(4):
-            try:
-                began = time.monotonic()
-                results = collect(model, addresses, batch)
+            began = time.monotonic()
+            box = {}
+
+            def run():
+                try:
+                    box["results"] = collect(model, addresses, batch)
+                except BaseException as error:  # reported below
+                    box["error"] = error
+
+            worker = threading.Thread(target=run, daemon=True)
+            worker.start()
+            # A request NDIF never answers would otherwise block this collector for good.
+            worker.join(timeout=args.timeout)
+            if "results" in box:
+                results = box["results"]
                 break
-            except Exception as error:
-                print(f"batch {number}: attempt {attempt + 1} failed: {type(error).__name__}: {str(error)[-300:]}", flush=True)
-                time.sleep(20 * (attempt + 1))
-        else:
-            sys.exit(f"batch {number} failed four times")
+            reason = f"no answer after {args.timeout}s" if worker.is_alive() else f"{type(box['error']).__name__}: {str(box['error'])[-300:]}"
+            print(f"batch {number}: attempt {attempt + 1} failed: {reason}", flush=True)
+            time.sleep(20 * (attempt + 1))
+        if results is None:
+            print(f"batch {number}: giving up for now; rerun to retry it", flush=True)
+            continue
         rows = [{"id": q["id"], "x": torch.stack(xs), "check": check} for q, (xs, check) in zip(chunk, results)]
         torch.save({"visits": VISITS, "rows": rows}, path)
         print(f"batch {number}: {len(rows)} questions in {time.monotonic() - began:.0f}s", flush=True)
@@ -97,3 +114,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+    sys.stdout.flush()
+    os._exit(0)  # an abandoned request's thread must not keep the process alive
